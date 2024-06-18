@@ -322,21 +322,33 @@ func newTLSConfig(dir string) (*tls.Config, error) {
 
 	tlsConfig := &tls.Config{}
 
-	// Load client cert
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		return nil, err
+	_, certFileErr := os.Stat(certFile)
+	_, keyFileErr := os.Stat(keyFile)
+	_, caFileErr := os.Stat(caFile)
+
+	if certFileErr != nil && keyFileErr != nil && caFileErr != nil {
+		return nil, errors.Join(certFileErr, keyFileErr, caFileErr)
 	}
-	tlsConfig.Certificates = []tls.Certificate{cert}
+
+	// Load client cert
+	if certFileErr == nil && keyFileErr == nil {
+		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+		if err != nil {
+			return nil, err
+		}
+		tlsConfig.Certificates = []tls.Certificate{cert}
+	}
 
 	// Load CA cert
-	caCert, err := os.ReadFile(caFile)
-	if err != nil {
-		return nil, err
+	if caFileErr == nil {
+		caCert, err := os.ReadFile(caFile)
+		if err != nil {
+			return nil, err
+		}
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(caCert)
+		tlsConfig.RootCAs = caCertPool
 	}
-	caCertPool := x509.NewCertPool()
-	caCertPool.AppendCertsFromPEM(caCert)
-	tlsConfig.RootCAs = caCertPool
 
 	return tlsConfig, nil
 }
